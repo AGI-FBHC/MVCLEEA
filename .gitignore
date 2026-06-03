@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.env
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data & model weights
+data/
+checkpoints/
+checkpoints_1/
+*.pth
+*.pt
+*.ckpt
+*.bin
+
+# Logs
+logs/
+*.log
+
+# PSSM / BLAST binaries & database
+pssm/
+
+# Pip install artifacts (=x.x.x corrupted files)
+=*
+
+# Papers & internal docs
+*.docx
+*.pdf
+PROJECT_CONTEXT.md
+coderAgentPrompt.md
+
+# Old / experimental
+old/

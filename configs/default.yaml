@@ -1,0 +1,48 @@
+# MVCLEEA Default Configuration
+# Multi-View Contrastive Learning for Enzyme Function Annotation
+
+model:
+  num_classes: 5236
+  esm2_dim: 1280
+  feature_dim: 128
+  num_heads: 4
+  max_seq_length: 1024
+
+loss:
+  lambda_val: 0.00           # λ=0 消融实验：无对比损失
+  temperature: 0.07
+  gamma: 5.0                 # γ: 更激进地压制易分类负样本
+  label_smoothing: 0.05
+
+training:
+  batch_size: 512
+  num_epochs: 100
+  learning_rate: 3.0e-4
+  weight_decay: 1.0e-5
+  scheduler: cosine
+  warmup_epochs: 10
+  grad_clip: 1.0
+  early_stopping_patience: 10
+
+data:
+  processed_dir: data/processed
+  esm2_features_path: null
+  pssm_path: null
+  onehot_path: null
+  labels_path: null
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  num_workers: 4
+  use_filtered_dataset: true    # 使用同EC大类负样本筛选
+  neg_per_pos: 5                # 每个正样本保留5个同大类负样本
+  augmentation:
+    esm2_noise_std: 0.01
+    pssm_dropout: 0.05
+    onehot_dropout: 0.05
+
+logging:
+  log_dir: ./logs
+  save_dir: ./checkpoints
+  log_interval: 10
+  save_interval: 5
