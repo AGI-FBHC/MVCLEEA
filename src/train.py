@@ -7,8 +7,9 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import csv
-import sys
 import argparse
+import json
+import random
 from pathlib import Path
 from collections import Counter
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
@@ -101,6 +102,20 @@ class MultiLabelHierarchicalSupConLoss(nn.Module):
         return total / max(total_weight, 1e-8)
 
 
+class SingleLabelHierarchicalSupConLoss(MultiLabelHierarchicalSupConLoss):
+    """Ablation that keeps only one EC prefix per protein and level."""
+
+    def forward(self, embeddings, labels_per_level):
+        single_label_views = []
+        for labels in labels_per_level:
+            first_index = labels.float().argmax(dim=1)
+            single = F.one_hot(
+                first_index, num_classes=labels.size(1)
+            ).to(torch.bool)
+            single_label_views.append(single)
+        return super().forward(embeddings, single_label_views)
+
+
 def teacher_alignment_loss(teacher, students):
     """Align each biological view to ESM while preserving ESM as the anchor."""
     target = F.normalize(teacher.detach(), dim=1)
@@ -139,24 +154,45 @@ class MVCLEEA_ESM2_PSSM_OneHotV2(nn.Module):
     """Mask-aware ESM-2 + PSSM + OneHot model."""
 
     def __init__(self, esm_dim=1280,
-                 feature_dim=256, hidden_dim=512, out_dim=128, num_heads=8):
+                 feature_dim=256, hidden_dim=512, out_dim=128, num_heads=8,
+                 ablation='full'):
         super().__init__()
+        self.ablation = ablation
         self.esm_encoder = PLMViewEncoder(esm_dim, feature_dim)
         self.pssm_encoder = ResidueEncoder(20, feature_dim)
         self.onehot_encoder = ResidueEncoder(21, feature_dim)
         self.cross_attention = CrossAttentionPooling(feature_dim, num_heads)
         self.fusion = DynamicFeatureFusion(feature_dim, num_views=4)
         self.projection = ProjectionHead(feature_dim, hidden_dim, out_dim)
+        if ablation == 'no_dynamic_fusion':
+            self.uniform_norm = nn.LayerNorm(feature_dim)
 
     def forward(self, esm, pssm, onehot):
         mask = onehot.abs().sum(dim=-1) > 0
+        if self.ablation == 'no_mask':
+            mask = torch.ones_like(mask)
         # Mask inconsistent PSSM padding before any normalization or convolution.
         pssm = pssm.masked_fill(~mask.unsqueeze(-1), 0.0)
         Z_E = self.esm_encoder(esm)
         Z_P = self.pssm_encoder(pssm, mask)
         Z_O = self.onehot_encoder(onehot, mask)
-        Z_S, attn_weights = self.cross_attention(Z_E, Z_P, Z_O)
-        Z_F, fusion_weights = self.fusion(Z_E, Z_P, Z_O, Z_S)
+        if self.ablation == 'no_pssm':
+            Z_P = torch.zeros_like(Z_P)
+        if self.ablation == 'no_onehot':
+            Z_O = torch.zeros_like(Z_O)
+        if self.ablation == 'no_cross_attention':
+            Z_S = torch.zeros_like(Z_E)
+            attn_weights = None
+        else:
+            Z_S, attn_weights = self.cross_attention(Z_E, Z_P, Z_O)
+        if self.ablation == 'no_dynamic_fusion':
+            views = torch.stack([Z_E, Z_P, Z_O, Z_S], dim=1)
+            Z_F = self.uniform_norm(views.mean(dim=1) + Z_E)
+            fusion_weights = torch.full(
+                (esm.size(0), 4), 0.25, device=esm.device
+            )
+        else:
+            Z_F, fusion_weights = self.fusion(Z_E, Z_P, Z_O, Z_S)
         embedding = self.projection(Z_F)
         return embedding, Z_E, Z_P, Z_O, Z_S, attn_weights, fusion_weights
 
@@ -255,7 +291,8 @@ def load_data(ids, data_dir, split_name):
 
 def train(train_ids, id_ec, ec_id, data_dir, split_name,
           epochs=100, lr=0.0005, batch_size=128, temperature=0.07,
-          alpha=0.1, device='cpu', save_path='data/model/esm2_pssm_onehot_v2.pth'):
+          alpha=0.1, device='cpu', save_path='models/mvcleea_v2.pth',
+          ablation='full', seed=42, log_interval=1):
     """Train ESM-2 + PSSM + OneHot model."""
 
     print('Loading data...', flush=True)
@@ -281,18 +318,45 @@ def train(train_ids, id_ec, ec_id, data_dir, split_name,
                     labels[i, ec_to_idx_per_level[level][le]] = True
         label_tensors[level] = torch.from_numpy(labels)
 
-    model = MVCLEEA_ESM2_PSSM_OneHotV2().to(device)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    model = MVCLEEA_ESM2_PSSM_OneHotV2(ablation=ablation).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
-    supcon_criterion = MultiLabelHierarchicalSupConLoss(temperature=temperature)
+    level_weights = (
+        (0.0, 0.0, 0.0, 1.0)
+        if ablation == 'l4_only'
+        else (0.1, 0.2, 0.3, 0.4)
+    )
+    loss_class = (
+        SingleLabelHierarchicalSupConLoss
+        if ablation == 'single_label'
+        else MultiLabelHierarchicalSupConLoss
+    )
+    supcon_criterion = loss_class(
+        temperature=temperature,
+        level_weights=level_weights,
+    )
+    effective_alpha = 0.0 if ablation == 'no_alignment' else alpha
 
-    print(f'Training for {epochs} epochs...', flush=True)
+    print(
+        f'Training for {epochs} epochs '
+        f'(ablation={ablation}, seed={seed}, alpha={effective_alpha})...',
+        flush=True,
+    )
     best_loss = float('inf')
 
     for epoch in range(epochs):
         model.train()
         total_loss = 0
+        total_supcon = 0
+        total_crossview = 0
+        batch_count = 0
         indices = torch.randperm(len(train_ids))
 
         for i in range(0, len(train_ids), batch_size):
@@ -313,29 +377,39 @@ def train(train_ids, id_ec, ec_id, data_dir, split_name,
             loss_supcon = supcon_criterion(embedding, hier_label_batch)
             loss_crossview = teacher_alignment_loss(Z_E, (Z_P, Z_O))
 
-            loss = (1 - alpha) * loss_supcon + alpha * loss_crossview
+            loss = (
+                (1 - effective_alpha) * loss_supcon
+                + effective_alpha * loss_crossview
+            )
 
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             total_loss += loss.item()
+            total_supcon += loss_supcon.item()
+            total_crossview += loss_crossview.item()
+            batch_count += 1
 
         scheduler.step()
-        avg_loss = total_loss / max(len(train_ids) // batch_size, 1)
+        avg_loss = total_loss / max(batch_count, 1)
+        avg_supcon = total_supcon / max(batch_count, 1)
+        avg_crossview = total_crossview / max(batch_count, 1)
 
-        if (epoch + 1) % 10 == 0:
-            supcon_val = loss_supcon.item() if hasattr(loss_supcon, 'item') else float(loss_supcon)
-            crossview_val = loss_crossview.item() if hasattr(loss_crossview, 'item') else float(loss_crossview)
+        if (epoch + 1) % log_interval == 0:
             print(f'Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f} '
-                  f'(SupCon: {supcon_val:.4f}, CrossView: {crossview_val:.4f})', flush=True)
+                  f'(SupCon: {avg_supcon:.4f}, '
+                  f'CrossView: {avg_crossview:.4f}, '
+                  f'LR: {scheduler.get_last_lr()[0]:.8f})', flush=True)
 
         if avg_loss < best_loss:
             best_loss = avg_loss
             torch.save(model.state_dict(), save_path)
 
     print(f'Training completed! Best loss: {best_loss:.4f}', flush=True)
-    model.load_state_dict(torch.load(save_path, map_location=device, weights_only=True))
+    model.load_state_dict(
+        torch.load(save_path, map_location=device, weights_only=True)
+    )
     return model
 
 
@@ -395,8 +469,13 @@ def evaluate_model(model, train_ids, test_ids, id_ec, test_id_ec, ec_id,
         p = precision_score(yt, yp, average='weighted', zero_division=0)
         r = recall_score(yt, yp, average='weighted', zero_division=0)
         f1 = f1_score(yt, yp, average='weighted', zero_division=0)
-        try: auc = roc_auc_score(yt, yp, average='weighted')
-        except: auc = 0.0
+        valid_auc = (yt.sum(axis=0) > 0) & (yt.sum(axis=0) < len(yt))
+        try:
+            auc = roc_auc_score(
+                yt[:, valid_auc], yp[:, valid_auc], average='weighted'
+            )
+        except ValueError:
+            auc = 0.0
         results[level] = {'precision': p, 'recall': r, 'f1': f1, 'auc': auc}
 
     return results
@@ -416,6 +495,24 @@ def main():
     parser.add_argument('--gpu', type=int, default=2)
     parser.add_argument('--alpha', type=float, default=0.1)
     parser.add_argument('--project_root', type=Path, default=PROJECT_ROOT)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--log_interval', type=int, default=1)
+    parser.add_argument(
+        '--ablation',
+        choices=[
+            'full',
+            'no_mask',
+            'single_label',
+            'l4_only',
+            'no_dynamic_fusion',
+            'no_cross_attention',
+            'no_alignment',
+            'no_pssm',
+            'no_onehot',
+        ],
+        default='full',
+    )
+    parser.add_argument('--experiment_name', type=str)
     parser.add_argument('--retrain', action='store_true')
     args = parser.parse_args()
 
@@ -434,16 +531,22 @@ def main():
     esm2_dir = str(feature_dir / 'esm2')
     data_dir = str(feature_dir)
 
-    model_path = project_root / 'models' / f'mvcleea_v2_{args.train_data}.pth'
+    default_name = f'mvcleea_v2_{args.train_data}'
+    experiment_name = args.experiment_name or default_name
+    model_path = project_root / 'models' / f'{experiment_name}.pth'
     model_path.parent.mkdir(parents=True, exist_ok=True)
-    model = MVCLEEA_ESM2_PSSM_OneHotV2().to(device)
+    model = MVCLEEA_ESM2_PSSM_OneHotV2(
+        ablation=args.ablation
+    ).to(device)
 
     if args.retrain or not os.path.exists(model_path):
         model = train(
             train_ids, id_ec, ec_id, data_dir, args.train_data,
             epochs=args.epochs, lr=args.lr, batch_size=args.batch_size,
             alpha=args.alpha,
-            device=device, save_path=model_path
+            device=device, save_path=model_path,
+            ablation=args.ablation, seed=args.seed,
+            log_interval=args.log_interval,
         )
     else:
         print(f'Loading model from {model_path}', flush=True)
@@ -466,6 +569,27 @@ def main():
         line = f'{level:>6d} | {r["precision"]:10.4f} | {r["recall"]:10.4f} | {r["f1"]:10.4f} | {r["auc"]:10.4f}'
         print(line, flush=True)
     print(f'{"="*60}', flush=True)
+
+    result_path = project_root / 'results' / f'{experiment_name}.json'
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        'experiment_name': experiment_name,
+        'ablation': args.ablation,
+        'train_data': args.train_data,
+        'test_data': args.test_data,
+        'epochs': args.epochs,
+        'batch_size': args.batch_size,
+        'learning_rate': args.lr,
+        'temperature': 0.07,
+        'alpha': 0.0 if args.ablation == 'no_alignment' else args.alpha,
+        'seed': args.seed,
+        'results': {f'L{level}': results[level] for level in range(1, 5)},
+    }
+    result_path.write_text(
+        json.dumps(payload, indent=2) + '\n',
+        encoding='utf-8',
+    )
+    print(f'Results saved to {result_path}', flush=True)
 
 
 if __name__ == '__main__':
