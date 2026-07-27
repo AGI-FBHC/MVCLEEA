@@ -1,0 +1,143 @@
+============================================================
+MVCLEEA v2 ablation experiment
+============================================================
+experiment=ablation_split10_no_alignment_seed42
+ablation=no_alignment
+train_split=split10
+test_split=new
+seed=42
+epochs=100
+batch_size=128
+gpu=2
+start_time=2026-07-27T21:40:55+00:00
+hostname=jnu-aipr-server6
+git_commit=65f05f7f457be6db54b8e73f582a3727590e43e7
+python=Python 3.10.20
+torch=2.5.1+cu121
+cuda=12.1
+numpy=2.2.6
+scikit_learn=1.7.2
+0, NVIDIA GeForce RTX 3090, 24576 MiB, 3118 MiB
+1, NVIDIA GeForce RTX 3090, 24576 MiB, 18075 MiB
+2, NVIDIA GeForce RTX 3090, 24576 MiB, 3562 MiB
+3, NVIDIA GeForce RTX 3090, 24576 MiB, 18075 MiB
+command=/home/gej/.conda/envs/mvcleea/bin/python src/train.py --train_data split10 --test_data new --epochs 100 --batch_size 128 --gpu 2 --seed 42 --ablation no_alignment --experiment_name ablation_split10_no_alignment_seed42 --retrain
+Device: cuda:2
+Loading data...
+Training for 100 epochs (ablation=no_alignment, seed=42, alpha=0.0)...
+Epoch 1/100, Loss: 4.5161 (SupCon: 4.5161, CrossView: 0.9045, LR: 0.00049988)
+Epoch 2/100, Loss: 4.0679 (SupCon: 4.0679, CrossView: 1.0014, LR: 0.00049951)
+Epoch 3/100, Loss: 3.8414 (SupCon: 3.8414, CrossView: 1.0458, LR: 0.00049889)
+Epoch 4/100, Loss: 3.6795 (SupCon: 3.6795, CrossView: 1.0888, LR: 0.00049803)
+Epoch 5/100, Loss: 3.5145 (SupCon: 3.5145, CrossView: 1.0991, LR: 0.00049692)
+Epoch 6/100, Loss: 3.3948 (SupCon: 3.3948, CrossView: 1.1166, LR: 0.00049557)
+Epoch 7/100, Loss: 3.2864 (SupCon: 3.2864, CrossView: 1.1533, LR: 0.00049398)
+Epoch 8/100, Loss: 3.1778 (SupCon: 3.1778, CrossView: 1.1460, LR: 0.00049215)
+Epoch 9/100, Loss: 3.0964 (SupCon: 3.0964, CrossView: 1.1470, LR: 0.00049007)
+Epoch 10/100, Loss: 2.9521 (SupCon: 2.9521, CrossView: 1.1467, LR: 0.00048776)
+Epoch 11/100, Loss: 2.9134 (SupCon: 2.9134, CrossView: 1.1697, LR: 0.00048522)
+Epoch 12/100, Loss: 2.8067 (SupCon: 2.8067, CrossView: 1.1798, LR: 0.00048244)
+Epoch 13/100, Loss: 2.7547 (SupCon: 2.7547, CrossView: 1.1830, LR: 0.00047944)
+Epoch 14/100, Loss: 2.7092 (SupCon: 2.7092, CrossView: 1.1808, LR: 0.00047621)
+Epoch 15/100, Loss: 2.6537 (SupCon: 2.6537, CrossView: 1.1874, LR: 0.00047275)
+Epoch 16/100, Loss: 2.6132 (SupCon: 2.6132, CrossView: 1.1956, LR: 0.00046908)
+Epoch 17/100, Loss: 2.5801 (SupCon: 2.5801, CrossView: 1.2046, LR: 0.00046519)
+Epoch 18/100, Loss: 2.5257 (SupCon: 2.5257, CrossView: 1.2136, LR: 0.00046108)
+Epoch 19/100, Loss: 2.4940 (SupCon: 2.4940, CrossView: 1.2067, LR: 0.00045677)
+Epoch 20/100, Loss: 2.4291 (SupCon: 2.4291, CrossView: 1.2137, LR: 0.00045225)
+Epoch 21/100, Loss: 2.4382 (SupCon: 2.4382, CrossView: 1.2063, LR: 0.00044754)
+Epoch 22/100, Loss: 2.3974 (SupCon: 2.3974, CrossView: 1.2178, LR: 0.00044263)
+Epoch 23/100, Loss: 2.3365 (SupCon: 2.3365, CrossView: 1.2223, LR: 0.00043753)
+Epoch 24/100, Loss: 2.3453 (SupCon: 2.3453, CrossView: 1.2192, LR: 0.00043224)
+Epoch 25/100, Loss: 2.3265 (SupCon: 2.3265, CrossView: 1.2283, LR: 0.00042678)
+Epoch 26/100, Loss: 2.3309 (SupCon: 2.3309, CrossView: 1.2241, LR: 0.00042114)
+Epoch 27/100, Loss: 2.2927 (SupCon: 2.2927, CrossView: 1.2208, LR: 0.00041533)
+Epoch 28/100, Loss: 2.2713 (SupCon: 2.2713, CrossView: 1.2065, LR: 0.00040936)
+Epoch 29/100, Loss: 2.2469 (SupCon: 2.2469, CrossView: 1.2231, LR: 0.00040323)
+Epoch 30/100, Loss: 2.2804 (SupCon: 2.2804, CrossView: 1.2206, LR: 0.00039695)
+Epoch 31/100, Loss: 2.2294 (SupCon: 2.2294, CrossView: 1.2374, LR: 0.00039052)
+Epoch 32/100, Loss: 2.2081 (SupCon: 2.2081, CrossView: 1.2131, LR: 0.00038396)
+Epoch 33/100, Loss: 2.1959 (SupCon: 2.1959, CrossView: 1.2234, LR: 0.00037726)
+Epoch 34/100, Loss: 2.1808 (SupCon: 2.1808, CrossView: 1.2196, LR: 0.00037044)
+Epoch 35/100, Loss: 2.1830 (SupCon: 2.1830, CrossView: 1.2195, LR: 0.00036350)
+Epoch 36/100, Loss: 2.1551 (SupCon: 2.1551, CrossView: 1.2384, LR: 0.00035644)
+Epoch 37/100, Loss: 2.1447 (SupCon: 2.1447, CrossView: 1.2417, LR: 0.00034929)
+Epoch 38/100, Loss: 2.1476 (SupCon: 2.1476, CrossView: 1.2346, LR: 0.00034203)
+Epoch 39/100, Loss: 2.1257 (SupCon: 2.1257, CrossView: 1.2422, LR: 0.00033468)
+Epoch 40/100, Loss: 2.1148 (SupCon: 2.1148, CrossView: 1.2410, LR: 0.00032725)
+Epoch 41/100, Loss: 2.1076 (SupCon: 2.1076, CrossView: 1.2454, LR: 0.00031975)
+Epoch 42/100, Loss: 2.0957 (SupCon: 2.0957, CrossView: 1.2492, LR: 0.00031217)
+Epoch 43/100, Loss: 2.0760 (SupCon: 2.0760, CrossView: 1.2365, LR: 0.00030454)
+Epoch 44/100, Loss: 2.0953 (SupCon: 2.0953, CrossView: 1.2332, LR: 0.00029685)
+Epoch 45/100, Loss: 2.0795 (SupCon: 2.0795, CrossView: 1.2381, LR: 0.00028911)
+Epoch 46/100, Loss: 2.0626 (SupCon: 2.0626, CrossView: 1.2463, LR: 0.00028133)
+Epoch 47/100, Loss: 2.0710 (SupCon: 2.0710, CrossView: 1.2424, LR: 0.00027353)
+Epoch 48/100, Loss: 2.0459 (SupCon: 2.0459, CrossView: 1.2457, LR: 0.00026570)
+Epoch 49/100, Loss: 2.0573 (SupCon: 2.0573, CrossView: 1.2405, LR: 0.00025785)
+Epoch 50/100, Loss: 2.0433 (SupCon: 2.0433, CrossView: 1.2295, LR: 0.00025000)
+Epoch 51/100, Loss: 2.0417 (SupCon: 2.0417, CrossView: 1.2400, LR: 0.00024215)
+Epoch 52/100, Loss: 2.0554 (SupCon: 2.0554, CrossView: 1.2426, LR: 0.00023430)
+Epoch 53/100, Loss: 2.0319 (SupCon: 2.0319, CrossView: 1.2378, LR: 0.00022647)
+Epoch 54/100, Loss: 2.0279 (SupCon: 2.0279, CrossView: 1.2565, LR: 0.00021867)
+Epoch 55/100, Loss: 2.0282 (SupCon: 2.0282, CrossView: 1.2402, LR: 0.00021089)
+Epoch 56/100, Loss: 2.0368 (SupCon: 2.0368, CrossView: 1.2482, LR: 0.00020315)
+Epoch 57/100, Loss: 2.0152 (SupCon: 2.0152, CrossView: 1.2547, LR: 0.00019546)
+Epoch 58/100, Loss: 2.0017 (SupCon: 2.0017, CrossView: 1.2603, LR: 0.00018783)
+Epoch 59/100, Loss: 2.0039 (SupCon: 2.0039, CrossView: 1.2488, LR: 0.00018025)
+Epoch 60/100, Loss: 1.9945 (SupCon: 1.9945, CrossView: 1.2544, LR: 0.00017275)
+Epoch 61/100, Loss: 1.9960 (SupCon: 1.9960, CrossView: 1.2610, LR: 0.00016532)
+Epoch 62/100, Loss: 1.9950 (SupCon: 1.9950, CrossView: 1.2619, LR: 0.00015797)
+Epoch 63/100, Loss: 1.9761 (SupCon: 1.9761, CrossView: 1.2607, LR: 0.00015071)
+Epoch 64/100, Loss: 1.9845 (SupCon: 1.9845, CrossView: 1.2574, LR: 0.00014356)
+Epoch 65/100, Loss: 1.9798 (SupCon: 1.9798, CrossView: 1.2537, LR: 0.00013650)
+Epoch 66/100, Loss: 1.9824 (SupCon: 1.9824, CrossView: 1.2533, LR: 0.00012956)
+Epoch 67/100, Loss: 1.9687 (SupCon: 1.9687, CrossView: 1.2586, LR: 0.00012274)
+Epoch 68/100, Loss: 1.9613 (SupCon: 1.9613, CrossView: 1.2577, LR: 0.00011604)
+Epoch 69/100, Loss: 1.9593 (SupCon: 1.9593, CrossView: 1.2610, LR: 0.00010948)
+Epoch 70/100, Loss: 1.9666 (SupCon: 1.9666, CrossView: 1.2561, LR: 0.00010305)
+Epoch 71/100, Loss: 1.9561 (SupCon: 1.9561, CrossView: 1.2488, LR: 0.00009677)
+Epoch 72/100, Loss: 1.9481 (SupCon: 1.9481, CrossView: 1.2457, LR: 0.00009064)
+Epoch 73/100, Loss: 1.9545 (SupCon: 1.9545, CrossView: 1.2482, LR: 0.00008467)
+Epoch 74/100, Loss: 1.9556 (SupCon: 1.9556, CrossView: 1.2549, LR: 0.00007886)
+Epoch 75/100, Loss: 1.9456 (SupCon: 1.9456, CrossView: 1.2487, LR: 0.00007322)
+Epoch 76/100, Loss: 1.9458 (SupCon: 1.9458, CrossView: 1.2516, LR: 0.00006776)
+Epoch 77/100, Loss: 1.9403 (SupCon: 1.9403, CrossView: 1.2557, LR: 0.00006247)
+Epoch 78/100, Loss: 1.9550 (SupCon: 1.9550, CrossView: 1.2498, LR: 0.00005737)
+Epoch 79/100, Loss: 1.9415 (SupCon: 1.9415, CrossView: 1.2563, LR: 0.00005246)
+Epoch 80/100, Loss: 1.9382 (SupCon: 1.9382, CrossView: 1.2504, LR: 0.00004775)
+Epoch 81/100, Loss: 1.9479 (SupCon: 1.9479, CrossView: 1.2492, LR: 0.00004323)
+Epoch 82/100, Loss: 1.9447 (SupCon: 1.9447, CrossView: 1.2503, LR: 0.00003892)
+Epoch 83/100, Loss: 1.9253 (SupCon: 1.9253, CrossView: 1.2496, LR: 0.00003481)
+Epoch 84/100, Loss: 1.9294 (SupCon: 1.9294, CrossView: 1.2495, LR: 0.00003092)
+Epoch 85/100, Loss: 1.9393 (SupCon: 1.9393, CrossView: 1.2504, LR: 0.00002725)
+Epoch 86/100, Loss: 1.9248 (SupCon: 1.9248, CrossView: 1.2465, LR: 0.00002379)
+Epoch 87/100, Loss: 1.9232 (SupCon: 1.9232, CrossView: 1.2470, LR: 0.00002056)
+Epoch 88/100, Loss: 1.9251 (SupCon: 1.9251, CrossView: 1.2456, LR: 0.00001756)
+Epoch 89/100, Loss: 1.9317 (SupCon: 1.9317, CrossView: 1.2486, LR: 0.00001478)
+Epoch 90/100, Loss: 1.9301 (SupCon: 1.9301, CrossView: 1.2529, LR: 0.00001224)
+Epoch 91/100, Loss: 1.9356 (SupCon: 1.9356, CrossView: 1.2525, LR: 0.00000993)
+Epoch 92/100, Loss: 1.9367 (SupCon: 1.9367, CrossView: 1.2513, LR: 0.00000785)
+Epoch 93/100, Loss: 1.9276 (SupCon: 1.9276, CrossView: 1.2516, LR: 0.00000602)
+Epoch 94/100, Loss: 1.9283 (SupCon: 1.9283, CrossView: 1.2514, LR: 0.00000443)
+Epoch 95/100, Loss: 1.9248 (SupCon: 1.9248, CrossView: 1.2515, LR: 0.00000308)
+Epoch 96/100, Loss: 1.9231 (SupCon: 1.9231, CrossView: 1.2507, LR: 0.00000197)
+Epoch 97/100, Loss: 1.9287 (SupCon: 1.9287, CrossView: 1.2510, LR: 0.00000111)
+Epoch 98/100, Loss: 1.9226 (SupCon: 1.9226, CrossView: 1.2513, LR: 0.00000049)
+Epoch 99/100, Loss: 1.9112 (SupCon: 1.9112, CrossView: 1.2511, LR: 0.00000012)
+Epoch 100/100, Loss: 1.9147 (SupCon: 1.9147, CrossView: 1.2514, LR: 0.00000000)
+Training completed! Best loss: 1.9112
+Evaluating...
+
+============================================================
+ESM-2 + PSSM + OneHot v2 Results
+============================================================
+ Level |  Precision |     Recall |         F1 |        AUC
+------------------------------------------------------------
+     1 |     0.7415 |     0.8737 |     0.7854 |     0.8770
+     2 |     0.7636 |     0.8338 |     0.7703 |     0.9035
+     3 |     0.6980 |     0.7494 |     0.6619 |     0.8651
+     4 |     0.3310 |     0.3757 |     0.3217 |     0.6850
+============================================================
+Results saved to /home/gej/project/MVCLEEA/results/ablation_split10_no_alignment_seed42.json
+end_time=2026-07-27T21:46:46+00:00
+elapsed_seconds=351
