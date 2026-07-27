@@ -1,0 +1,124 @@
+{
+  "splits": [
+    {
+      "path": "data/splits/new.csv",
+      "size_bytes": 186949
+    },
+    {
+      "path": "data/splits/split10.csv",
+      "size_bytes": 3585311
+    },
+    {
+      "path": "data/splits/split100.csv",
+      "size_bytes": 89416329
+    },
+    {
+      "path": "data/splits/split50.csv",
+      "size_bytes": 12361506
+    }
+  ],
+  "arrays": [
+    {
+      "path": "data/features/onehot/new_onehot.npy",
+      "size_bytes": 33718400,
+      "shape": [
+        392,
+        1024,
+        21
+      ],
+      "dtype": "float32"
+    },
+    {
+      "path": "data/features/onehot/split100_onehot.npy",
+      "size_bytes": 19556769920,
+      "shape": [
+        227362,
+        1024,
+        21
+      ],
+      "dtype": "float32"
+    },
+    {
+      "path": "data/features/onehot/split10_onehot.npy",
+      "size_bytes": 667226240,
+      "shape": [
+        7757,
+        1024,
+        21
+      ],
+      "dtype": "float32"
+    },
+    {
+      "path": "data/features/onehot/split50_onehot.npy",
+      "size_bytes": 2531451008,
+      "shape": [
+        29430,
+        1024,
+        21
+      ],
+      "dtype": "float32"
+    },
+    {
+      "path": "data/features/pssm/new_pssm.npy",
+      "size_bytes": 32112768,
+      "shape": [
+        392,
+        1024,
+        20
+      ],
+      "dtype": "float32"
+    },
+    {
+      "path": "data/features/pssm/split100_pssm.npy",
+      "size_bytes": 18625495168,
+      "shape": [
+        227362,
+        1024,
+        20
+      ],
+      "dtype": "float32"
+    },
+    {
+      "path": "data/features/pssm/split10_pssm.npy",
+      "size_bytes": 635453568,
+      "shape": [
+        7757,
+        1024,
+        20
+      ],
+      "dtype": "float32"
+    },
+    {
+      "path": "data/features/pssm/split50_pssm.npy",
+      "size_bytes": 2410905728,
+      "shape": [
+        29430,
+        1024,
+        20
+      ],
+      "dtype": "float32"
+    }
+  ],
+  "esm2": {
+    "path": "data/features/esm2",
+    "file_count": 227754,
+    "size_bytes": 1419187842,
+    "sample_shape": [
+      1280
+    ]
+  },
+  "models": [
+    {
+      "path": "models/mvcleea_v2_split10.pth",
+      "size_bytes": 9334975
+    },
+    {
+      "path": "models/mvcleea_v2_split100.pth",
+      "size_bytes": 9335052
+    },
+    {
+      "path": "models/mvcleea_v2_split50.pth",
+      "size_bytes": 9334975
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# Large datasets and extracted features are stored locally, not in Git.
+data/features/
+data/splits/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Temporary files
+tmp/
+*.tmp
