@@ -82,3 +82,39 @@ when their direction persists on larger splits or across additional seeds.
 
 Detailed logs are in `logs/ablations/`; machine-readable per-run metrics and
 summary files are in `results/`.
+
+## split50 results
+
+| Ablation | L1 F1 | L2 F1 | L3 F1 | L4 F1 | Delta L4 |
+|---|---:|---:|---:|---:|---:|
+| Full | 0.9744 | 0.9430 | 0.9077 | 0.5481 | 0.0000 |
+| w/o padding mask | 0.9640 | 0.9270 | 0.8818 | 0.5116 | -0.0365 |
+| single-label hierarchy | 0.9484 | 0.9143 | 0.8346 | 0.4983 | -0.0498 |
+| L4 supervision only | 0.8357 | 0.7754 | 0.7569 | 0.4953 | -0.0528 |
+| w/o dynamic fusion | 0.9676 | 0.9368 | 0.9158 | 0.5268 | -0.0213 |
+| w/o cross-attention | 0.9648 | 0.9352 | 0.8942 | 0.5298 | -0.0183 |
+| w/o teacher alignment | 0.9541 | 0.9273 | 0.8592 | 0.5273 | -0.0208 |
+| w/o PSSM view | 0.9737 | 0.9389 | 0.8749 | 0.4938 | -0.0543 |
+| w/o OneHot view | 0.9629 | 0.9279 | 0.8444 | 0.4843 | -0.0639 |
+
+## Cross-scale analysis
+
+Unlike split10, every tested component has a positive L4 contribution on
+split50. This resolves several ambiguous small-data observations:
+
+- OneHot is the strongest individual view contribution on split50. Removing
+  it decreases L4 by 0.0639.
+- PSSM becomes clearly useful with more training proteins. Removing it
+  decreases L4 by 0.0543, whereas it appeared redundant on split10.
+- Multi-label supervision is beneficial at scale. Replacing it with one label
+  decreases L4 by 0.0498 and also harms every coarser level.
+- Multi-level supervision is important beyond coarse hierarchy on split50.
+  L4-only training decreases L4 by 0.0528 as well as strongly reducing L1-L3.
+- Masking has a substantial L4 effect (-0.0365), supporting the diagnosis that
+  inconsistent PSSM padding harms generalization.
+- Dynamic fusion, cross-attention and teacher alignment provide smaller but
+  consistent L4 gains of 0.0183-0.0213.
+
+The reversal between split10 and split50 shows why the small split should not
+be used alone to accept or reject model components. At split50, the complete
+method is the best L4 configuration among all controlled ablations.
