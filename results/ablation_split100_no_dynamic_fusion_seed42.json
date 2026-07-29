@@ -1,0 +1,38 @@
+{
+  "experiment_name": "ablation_split100_no_dynamic_fusion_seed42",
+  "ablation": "no_dynamic_fusion",
+  "train_data": "split100",
+  "test_data": "new",
+  "epochs": 100,
+  "batch_size": 128,
+  "learning_rate": 0.0005,
+  "temperature": 0.07,
+  "alpha": 0.1,
+  "seed": 42,
+  "results": {
+    "L1": {
+      "precision": 0.9638013264863087,
+      "recall": 0.9797979797979798,
+      "f1": 0.9701958751120845,
+      "auc": 0.9839064539190575
+    },
+    "L2": {
+      "precision": 0.9308646860513655,
+      "recall": 0.9571788413098237,
+      "f1": 0.9402304682592152,
+      "auc": 0.9752605784325302
+    },
+    "L3": {
+      "precision": 0.9205719649328672,
+      "recall": 0.9523809523809523,
+      "f1": 0.9246714822908781,
+      "auc": 0.9749352683472615
+    },
+    "L4": {
+      "precision": 0.6588437528186993,
+      "recall": 0.7773359840954275,
+      "f1": 0.6768383058170325,
+      "auc": 0.8830608003685959
+    }
+  }
+}

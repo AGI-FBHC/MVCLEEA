@@ -1,0 +1,38 @@
+{
+  "experiment_name": "ablation_split100_no_cross_attention_seed42",
+  "ablation": "no_cross_attention",
+  "train_data": "split100",
+  "test_data": "new",
+  "epochs": 100,
+  "batch_size": 128,
+  "learning_rate": 0.0005,
+  "temperature": 0.07,
+  "alpha": 0.1,
+  "seed": 42,
+  "results": {
+    "L1": {
+      "precision": 0.9668774522080306,
+      "recall": 0.9823232323232324,
+      "f1": 0.9740181908181653,
+      "auc": 0.9855344349399099
+    },
+    "L2": {
+      "precision": 0.9449065633187783,
+      "recall": 0.9773299748110831,
+      "f1": 0.9591427001760575,
+      "auc": 0.9859057178562873
+    },
+    "L3": {
+      "precision": 0.9263978850445016,
+      "recall": 0.9724310776942355,
+      "f1": 0.9414666153158441,
+      "auc": 0.9850062930368529
+    },
+    "L4": {
+      "precision": 0.6259805128465556,
+      "recall": 0.7693836978131213,
+      "f1": 0.6573107670251129,
+      "auc": 0.8785429660284391
+    }
+  }
+}
