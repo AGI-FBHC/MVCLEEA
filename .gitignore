@@ -1,12 +1,39 @@
-# Large datasets and extracted features are stored locally, not in Git.
+# Large precomputed features (about 44 GB)
 data/features/
-data/splits/
 
-# Python caches
+# Keep dataset split files and the artifact manifest in Git
+!data/splits/
+!data/splits/*.csv
+!data/MANIFEST.json
+
+# Keep release checkpoints only; ablation checkpoints can be regenerated
+models/*.pth
+!models/mvcleea_v2_split10.pth
+!models/mvcleea_v2_split50.pth
+!models/mvcleea_v2_split100.pth
+
+# Keep per-experiment ablation logs, ignore scheduler/worker noise and ad-hoc logs
+logs/*.log
+logs/ablations/*.log
+!logs/ablations/ablation_split*_seed*.log
+
+# Python and tooling caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Temporary files
+# Environments, editors and operating-system files
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary and local runtime files
 tmp/
 *.tmp
+*.swp
+nohup.out
