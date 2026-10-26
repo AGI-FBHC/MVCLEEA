@@ -1,124 +1,98 @@
 # MVCLEEA
 
-MVCLEEA（Multi-View Contrastive Learning for Enzyme Function Prediction）是一个面向酶 EC 编号预测的多视图对比学习框架。当前版本联合建模三类互补的序列衍生特征：
+MVCLEEA（Multi-View Contrastive Learning for Enzyme Function Prediction）是一个面向酶 EC 编号预测的多视图对比学习框架。
 
-- **ESM-2 语义视图**：描述蛋白质序列的上下文语义；
-- **PSSM 进化视图**：描述残基位置的进化保守性；
-- **One-Hot 残基视图**：保留原始氨基酸身份与局部排列信息。
+本仓库只保存方法实现，不包含数据集、预计算特征、训练日志、模型 checkpoint 或实验结果。训练数据与特征应由使用者按本文说明在本地准备。
 
-模型使用带 padding mask 的残基编码器、跨视图注意力、特征融合和多标签层级监督对比学习生成 128 维表示，最后通过余弦 KNN 预测完整 EC 编号。
+## 方法组成
+
+- **ESM-2 语义视图**：对真实残基位置进行平均池化，排除 BOS、EOS 和 padding；
+- **PSSM 进化视图**：使用带残差连接的序列一维卷积编码；
+- **One-Hot 残基视图**：保留氨基酸身份和局部顺序信息；
+- **跨视图注意力**：通过全局 token 聚合三类视图；
+- **动态特征融合**：为各视图生成逐蛋白权重，并保留 ESM-2 残差；
+- **层级对比学习**：按 EC L1-L4 前缀构造多标签正样本；
+- **教师对齐**：将 PSSM 与 One-Hot 表示弱对齐到停止梯度的 ESM-2 表示；
+- **KNN 预测**：使用最终 128 维表示和余弦 KNN 预测完整 EC 编号。
+
+详细方法说明见 [`docs/METHOD.md`](docs/METHOD.md)。
 
 ## 目录结构
 
 ```text
 MVCLEEA/
-├── src/
-│   ├── train.py             # 训练、评估和消融入口
-│   ├── components.py        # 注意力、投影头等模型组件
-│   └── extract_esm2.py      # ESM-2 特征提取
-├── scripts/                 # 主实验、消融和结果汇总脚本
-├── data/
-│   ├── splits/              # split10、split50、split100、New-392
-│   ├── features/            # 本地预计算特征（不纳入 Git）
-│   └── MANIFEST.json        # 特征形状与文件规模清单
-├── models/                  # 三个主模型 checkpoint
-├── results/                 # 主实验和消融结果
-├── logs/                    # 可复现实验日志
-└── docs/                    # 方法与消融说明
+├── README.md
+├── requirements.txt
+├── docs/
+│   └── METHOD.md
+└── src/
+    ├── train.py             # 模型、损失、训练、评估和消融入口
+    ├── components.py        # 编码器、跨视图注意力和投影头
+    └── extract_esm2.py      # ESM-2 特征提取
 ```
 
-## 实验环境
+## 环境
 
-
-| 组件 | 版本 |
-|---|---|
-| 操作系统 | Linux |
-| Python | 3.10.20 |
-| PyTorch | 2.5.1+cu121 |
-| CUDA Runtime | 12.1 |
-| NumPy | 2.2.6 |
-| scikit-learn | 1.7.2 |
-| pandas | 2.3.3 |
-| GPU | NVIDIA GeForce RTX 3090 24 GB |
-
-建议使用 Conda 创建独立环境：
+已验证环境为 Python 3.10、PyTorch 2.5.1 + CUDA 12.1、NumPy 2.2.6、scikit-learn 1.7.2 和 NVIDIA RTX 3090。
 
 ```bash
-conda create -n mvcleea python=3.10.20 -y
+conda create -n mvcleea python=3.10 -y
 conda activate mvcleea
 
-# CUDA 12.1 对应的 PyTorch
 pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
 ```
 
-安装完成后可检查环境：
+## 外部数据布局
 
-```bash
-python - <<'PY'
-import torch, numpy, sklearn
-print("torch:", torch.__version__)
-print("CUDA runtime:", torch.version.cuda)
-print("CUDA available:", torch.cuda.is_available())
-print("numpy:", numpy.__version__)
-print("scikit-learn:", sklearn.__version__)
-PY
-```
-
-## 数据与特征
-
-仓库包含四个 TSV 格式的数据划分：
-
-| 文件 | 蛋白质数量 | 用途 |
-|---|---:|---|
-| `split10.csv` | 7,757 | 低同源训练集 |
-| `split50.csv` | 29,430 | 中等规模训练集 |
-| `split100.csv` | 227,362 | 全量训练集 |
-| `new.csv` | 392 | New-392 独立测试集 |
-
-预计算特征约 44 GB。训练前需按以下结构放置：
+训练代码默认从仓库根目录读取 `data/`、`models/` 和 `results/`。如果这些目录位于其他位置，可通过 `--project_root` 指定。
 
 ```text
-data/features/
-├── esm2/
-│   └── <UniProt_ID>.pt
-├── pssm/
-│   ├── split10_pssm.npy
-│   ├── split50_pssm.npy
-│   ├── split100_pssm.npy
-│   └── new_pssm.npy
-└── onehot/
-    ├── split10_onehot.npy
-    ├── split50_onehot.npy
-    ├── split100_onehot.npy
-    └── new_onehot.npy
+workspace/
+├── data/
+│   ├── splits/
+│   │   ├── split10.csv
+│   │   ├── split50.csv
+│   │   ├── split100.csv
+│   │   └── new.csv
+│   └── features/
+│       ├── esm2/
+│       │   └── <UniProt_ID>.pt
+│       ├── esm2_split100_cache.npy
+│       ├── esm2_split100_cache_ids.pkl
+│       ├── pssm/
+│       │   ├── <split>_pssm.npy
+│       │   └── <split>_ids.pkl
+│       └── onehot/
+│           ├── <split>_onehot.npy
+│           └── <split>_ids.pkl
+├── models/
+└── results/
 ```
 
-主要张量规格：
+张量规格：
 
-- ESM-2：每个蛋白质一个 `1280` 维 `.pt` 文件；
+- ESM-2：每个蛋白质一个 1280 维 `.pt` 文件；
 - PSSM：`N × 1024 × 20`，`float32`；
 - One-Hot：`N × 1024 × 21`，`float32`；
-- 长度不足 1024 的序列在末尾补零，模型根据 One-Hot 全零位置构造 padding mask。
+- 序列长度不足 1024 时在末尾补零，padding mask 由 One-Hot 全零位置构造。
 
-ESM-2 特征可由仓库脚本提取：
+## 提取 ESM-2 特征
+
+数据划分 CSV 使用 TAB 分隔，ESM-2 提取脚本读取第一列的蛋白质 ID 和第三列的序列。
 
 ```bash
 python src/extract_esm2.py \
-  --data_dir data/splits \
-  --output_dir data/features/esm2 \
+  --data_dir workspace/data/splits \
+  --output_dir workspace/data/features/esm2 \
   --datasets split10 split50 split100 new \
   --batch_size 8 \
-  --gpu 2
+  --gpu 0
 ```
 
-PSSM 与 One-Hot 数组需预先生成或从项目数据发布页面获取。完整文件大小和形状见 `data/MANIFEST.json`。
+PSSM 与 One-Hot 数组需在训练前单独生成。
 
-## 训练与评估
-
-以下命令默认使用 GPU 2，可按机器情况修改 `--gpu`。
-
-### 训练主模型
+## 训练
 
 ```bash
 python src/train.py \
@@ -126,71 +100,64 @@ python src/train.py \
   --test_data new \
   --epochs 100 \
   --batch_size 128 \
-  --gpu 2 \
+  --gpu 0 \
   --seed 42 \
-  --retrain
+  --retrain \
+  --project_root workspace
 ```
 
-也可通过日志化脚本运行：
+将 `split10` 替换为 `split50` 或 `split100` 可运行其他训练规模。模型保存到 `workspace/models/`，评估结果保存到 `workspace/results/`。
 
-```bash
-GPU=2 EPOCHS=100 BATCH_SIZE=128 \
-  bash scripts/train_experiment.sh split10
-```
-
-将 `split10` 替换为 `split50` 或 `split100` 即可运行对应规模实验。
-
-### 评估已有模型
-
-不添加 `--retrain` 时，程序加载 `models/mvcleea_v2_<split>.pth`：
+## 评估已有模型
 
 ```bash
 python src/train.py \
   --train_data split100 \
   --test_data new \
-  --gpu 2
+  --gpu 0 \
+  --project_root workspace
 ```
 
-### 消融实验
+不添加 `--retrain` 时，程序会加载对应的已有模型 checkpoint 并进行评估。
 
-运行指定训练规模的完整消融套件：
+## 消融配置
 
-```bash
-GPU=2 SEED=42 EPOCHS=100 BATCH_SIZE=128 \
-  bash scripts/run_ablation_suite.sh split10
+`src/train.py` 支持以下 `--ablation` 取值：
+
+```text
+full
+no_mask
+single_label
+l4_only
+no_dynamic_fusion
+no_cross_attention
+no_alignment
+no_pssm
+no_onehot
+pssm_only
+pssm_onehot
+pssm_esm2
+esm_only
+onehot_only
+esm_onehot
+struct_basic
+struct_mask
+struct_align
+struct_attn
 ```
 
-运行单个消融配置：
+例如：
 
 ```bash
 python src/train.py \
   --train_data split10 \
   --test_data new \
-  --gpu 2 \
+  --gpu 0 \
   --seed 42 \
   --ablation no_cross_attention \
   --experiment_name ablation_split10_no_cross_attention_seed42 \
-  --retrain
+  --retrain \
+  --project_root workspace
 ```
 
-可用配置：`full`、`no_mask`、`single_label`、`l4_only`、`no_dynamic_fusion`、`no_cross_attention`、`no_alignment`、`no_pssm`、`no_onehot`。
-
-汇总已有消融结果：
-
-```bash
-python scripts/summarize_ablation.py --split split100 --seed 42
-```
-
-## 结果
-
-固定随机种子 `42` 的完整模型结果如下，指标为 weighted F1：
-
-| 训练集 | L1 | L2 | L3 | L4 |
-|---|---:|---:|---:|---:|
-| split10 | 0.8498 | 0.8307 | 0.6815 | 0.3043 |
-| split50 | 0.9744 | 0.9430 | 0.9077 | 0.5481 |
-| split100 | 0.9640 | 0.9473 | 0.9264 | **0.6720** |
-
-完整 Precision、Recall、F1 和消融结果位于 `results/`，对应训练过程位于 `logs/ablations/`。
-
-
+训练中断后可通过 `--resume_path` 指定断点，并使用 `--resume_epoch` 指定已完成的 epoch 数。
