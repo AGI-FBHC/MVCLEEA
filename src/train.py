@@ -164,12 +164,14 @@ class MVCLEEA_ESM2_PSSM_OneHotV2(nn.Module):
         self.cross_attention = CrossAttentionPooling(feature_dim, num_heads)
         self.fusion = DynamicFeatureFusion(feature_dim, num_views=4)
         self.projection = ProjectionHead(feature_dim, hidden_dim, out_dim)
-        if ablation == 'no_dynamic_fusion':
+        if ablation in ('no_dynamic_fusion', 'pssm_only', 'pssm_onehot', 'pssm_esm2',
+                         'esm_only', 'onehot_only', 'esm_onehot',
+                         'struct_basic', 'struct_mask', 'struct_align', 'struct_attn'):
             self.uniform_norm = nn.LayerNorm(feature_dim)
 
     def forward(self, esm, pssm, onehot):
         mask = onehot.abs().sum(dim=-1) > 0
-        if self.ablation == 'no_mask':
+        if self.ablation in ('no_mask', 'struct_basic'):
             mask = torch.ones_like(mask)
         # Mask inconsistent PSSM padding before any normalization or convolution.
         pssm = pssm.masked_fill(~mask.unsqueeze(-1), 0.0)
@@ -180,12 +182,52 @@ class MVCLEEA_ESM2_PSSM_OneHotV2(nn.Module):
             Z_P = torch.zeros_like(Z_P)
         if self.ablation == 'no_onehot':
             Z_O = torch.zeros_like(Z_O)
-        if self.ablation == 'no_cross_attention':
+        if self.ablation == 'pssm_only':
+            Z_E = torch.zeros_like(Z_E)
+            Z_O = torch.zeros_like(Z_O)
+            Z_S = Z_P
+            Z_F = self.uniform_norm(Z_P)
+            fusion_weights = torch.zeros(esm.size(0), 4, device=esm.device)
+            fusion_weights[:, 1] = 1.0
+            embedding = self.projection(Z_F)
+            return embedding, Z_E, Z_P, Z_O, Z_S, None, fusion_weights
+        if self.ablation == 'esm_only':
+            Z_P = torch.zeros_like(Z_P)
+            Z_O = torch.zeros_like(Z_O)
+            Z_S = Z_E
+            Z_F = self.uniform_norm(Z_E)
+            fusion_weights = torch.zeros(esm.size(0), 4, device=esm.device)
+            fusion_weights[:, 0] = 1.0
+            embedding = self.projection(Z_F)
+            return embedding, Z_E, Z_P, Z_O, Z_S, None, fusion_weights
+        if self.ablation == 'onehot_only':
+            Z_E = torch.zeros_like(Z_E)
+            Z_P = torch.zeros_like(Z_P)
+            Z_S = Z_O
+            Z_F = self.uniform_norm(Z_O)
+            fusion_weights = torch.zeros(esm.size(0), 4, device=esm.device)
+            fusion_weights[:, 2] = 1.0
+            embedding = self.projection(Z_F)
+            return embedding, Z_E, Z_P, Z_O, Z_S, None, fusion_weights
+        if self.ablation in ('pssm_onehot', 'pssm_esm2', 'esm_onehot'):
+            if self.ablation == 'pssm_onehot':
+                Z_E = torch.zeros_like(Z_E)
+                Z_S, attn_weights = self.cross_attention.forward_views([Z_P, Z_O])
+            elif self.ablation == 'pssm_esm2':
+                Z_O = torch.zeros_like(Z_O)
+                Z_S, attn_weights = self.cross_attention.forward_views([Z_P, Z_E])
+            else:
+                Z_P = torch.zeros_like(Z_P)
+                Z_S, attn_weights = self.cross_attention.forward_views([Z_E, Z_O])
+            Z_F, fusion_weights = self.fusion(Z_E, Z_P, Z_O, Z_S)
+            embedding = self.projection(Z_F)
+            return embedding, Z_E, Z_P, Z_O, Z_S, attn_weights, fusion_weights
+        if self.ablation in ('no_cross_attention', 'struct_basic', 'struct_mask', 'struct_align'):
             Z_S = torch.zeros_like(Z_E)
             attn_weights = None
         else:
             Z_S, attn_weights = self.cross_attention(Z_E, Z_P, Z_O)
-        if self.ablation == 'no_dynamic_fusion':
+        if self.ablation in ('no_dynamic_fusion', 'struct_basic', 'struct_mask', 'struct_align', 'struct_attn'):
             views = torch.stack([Z_E, Z_P, Z_O, Z_S], dim=1)
             Z_F = self.uniform_norm(views.mean(dim=1) + Z_E)
             fusion_weights = torch.full(
@@ -235,9 +277,25 @@ def load_esm2_embeddings(ids, esm2_dir):
     return torch.stack(emb_list)
 
 
+def load_esm2_embeddings_cached_or_file(ids, data_dir, split_name):
+    """Load split100 ESM-2 embeddings from the shared numpy cache when possible."""
+    cache_path = f'{data_dir}/esm2_split100_cache.npy'
+    cache_ids_path = f'{data_dir}/esm2_split100_cache_ids.pkl'
+    if split_name == 'split100' and os.path.exists(cache_path) and os.path.exists(cache_ids_path):
+        cached = np.load(cache_path)
+        with open(cache_ids_path, 'rb') as f:
+            cache_ids = pickle.load(f)
+        id_to_idx = {pid: i for i, pid in enumerate(cache_ids)}
+        missing = [pid for pid in ids if pid not in id_to_idx]
+        if not missing:
+            idx = [id_to_idx[pid] for pid in ids]
+            return torch.from_numpy(cached[idx]).float()
+    return load_esm2_embeddings(ids, esm2_dir)
+
+
 def load_data(ids, data_dir, split_name):
     """Load ESM-2, PSSM, OneHot for given IDs."""
-    esm = load_esm2_embeddings(ids, esm2_dir)
+    esm = load_esm2_embeddings_cached_or_file(ids, data_dir, split_name)
 
     # PSSM
     pssm_path = f'{data_dir}/pssm/{split_name}_pssm.npy'
@@ -246,14 +304,17 @@ def load_data(ids, data_dir, split_name):
         pssm_data = np.load(pssm_path)
         with open(pssm_ids_path, 'rb') as f:
             pssm_ids = pickle.load(f)
-        id_to_idx = {pid: i for i, pid in enumerate(pssm_ids)}
-        pssm_list = []
-        for pid in ids:
-            if pid in id_to_idx:
-                pssm_list.append(torch.tensor(pssm_data[id_to_idx[pid]], dtype=torch.float32))
-            else:
-                pssm_list.append(torch.zeros(1024, 20))
-        pssm = torch.stack(pssm_list)
+        if list(pssm_ids) == list(ids):
+            pssm = torch.from_numpy(pssm_data).float()
+        else:
+            id_to_idx = {pid: i for i, pid in enumerate(pssm_ids)}
+            pssm_list = []
+            for pid in ids:
+                if pid in id_to_idx:
+                    pssm_list.append(torch.tensor(pssm_data[id_to_idx[pid]], dtype=torch.float32))
+                else:
+                    pssm_list.append(torch.zeros(1024, 20))
+            pssm = torch.stack(pssm_list)
     else:
         pssm = torch.zeros(len(ids), 1024, 20)
 
@@ -271,14 +332,17 @@ def load_data(ids, data_dir, split_name):
                 onehot_ids = pickle.load(f)
         else:
             raise FileNotFoundError(f'No ID mapping found for {onehot_path}')
-        id_to_idx = {pid: i for i, pid in enumerate(onehot_ids)}
-        onehot_list = []
-        for pid in ids:
-            if pid in id_to_idx:
-                onehot_list.append(torch.tensor(onehot_data[id_to_idx[pid]], dtype=torch.float32))
-            else:
-                onehot_list.append(torch.zeros(1024, 21))
-        onehot = torch.stack(onehot_list)
+        if list(onehot_ids) == list(ids):
+            onehot = torch.from_numpy(onehot_data).float()
+        else:
+            id_to_idx = {pid: i for i, pid in enumerate(onehot_ids)}
+            onehot_list = []
+            for pid in ids:
+                if pid in id_to_idx:
+                    onehot_list.append(torch.tensor(onehot_data[id_to_idx[pid]], dtype=torch.float32))
+                else:
+                    onehot_list.append(torch.zeros(1024, 21))
+            onehot = torch.stack(onehot_list)
     else:
         onehot = torch.zeros(len(ids), 1024, 21)
 
@@ -292,7 +356,8 @@ def load_data(ids, data_dir, split_name):
 def train(train_ids, id_ec, ec_id, data_dir, split_name,
           epochs=100, lr=0.0005, batch_size=128, temperature=0.07,
           alpha=0.1, device='cpu', save_path='models/mvcleea_v2.pth',
-          ablation='full', seed=42, log_interval=1):
+          ablation='full', seed=42, log_interval=1, start_epoch=0,
+          init_state_dict=None):
     """Train ESM-2 + PSSM + OneHot model."""
 
     print('Loading data...', flush=True)
@@ -325,8 +390,13 @@ def train(train_ids, id_ec, ec_id, data_dir, split_name,
         torch.cuda.manual_seed_all(seed)
 
     model = MVCLEEA_ESM2_PSSM_OneHotV2(ablation=ablation).to(device)
+    if init_state_dict is not None:
+        model.load_state_dict(init_state_dict)
+        print(f'Resuming from epoch {start_epoch} with a partial checkpoint', flush=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    for _ in range(start_epoch):
+        scheduler.step()
 
     level_weights = (
         (0.0, 0.0, 0.0, 1.0)
@@ -342,7 +412,11 @@ def train(train_ids, id_ec, ec_id, data_dir, split_name,
         temperature=temperature,
         level_weights=level_weights,
     )
-    effective_alpha = 0.0 if ablation == 'no_alignment' else alpha
+    effective_alpha = 0.0 if ablation in (
+        'no_alignment', 'pssm_only', 'pssm_onehot',
+        'esm_only', 'onehot_only', 'esm_onehot',
+        'struct_basic', 'struct_mask',
+    ) else alpha
 
     print(
         f'Training for {epochs} epochs '
@@ -351,7 +425,7 @@ def train(train_ids, id_ec, ec_id, data_dir, split_name,
     )
     best_loss = float('inf')
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         model.train()
         total_loss = 0
         total_supcon = 0
@@ -375,7 +449,11 @@ def train(train_ids, id_ec, ec_id, data_dir, split_name,
             embedding, Z_E, Z_P, Z_O, Z_S, _, _ = model(esm_batch, pssm_batch, onehot_batch)
 
             loss_supcon = supcon_criterion(embedding, hier_label_batch)
-            loss_crossview = teacher_alignment_loss(Z_E, (Z_P, Z_O))
+            if ablation in ('esm_only', 'onehot_only', 'esm_onehot',
+                           'pssm_only', 'pssm_onehot', 'struct_basic', 'struct_mask'):
+                loss_crossview = torch.tensor(0.0, device=device)
+            else:
+                loss_crossview = teacher_alignment_loss(Z_E, (Z_P, Z_O))
 
             loss = (
                 (1 - effective_alpha) * loss_supcon
@@ -509,11 +587,23 @@ def main():
             'no_alignment',
             'no_pssm',
             'no_onehot',
+            'pssm_only',
+            'pssm_onehot',
+            'pssm_esm2',
+            'esm_only',
+            'onehot_only',
+            'esm_onehot',
+            'struct_basic',
+            'struct_mask',
+            'struct_align',
+            'struct_attn',
         ],
         default='full',
     )
     parser.add_argument('--experiment_name', type=str)
     parser.add_argument('--retrain', action='store_true')
+    parser.add_argument('--resume_path', type=str, default=None)
+    parser.add_argument('--resume_epoch', type=int, default=0)
     args = parser.parse_args()
 
     device = torch.device(f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu')
@@ -539,7 +629,18 @@ def main():
         ablation=args.ablation
     ).to(device)
 
-    if args.retrain or not os.path.exists(model_path):
+    if args.resume_path:
+        resume_state = torch.load(args.resume_path, map_location=device, weights_only=True)
+        model = train(
+            train_ids, id_ec, ec_id, data_dir, args.train_data,
+            epochs=args.epochs, lr=args.lr, batch_size=args.batch_size,
+            alpha=args.alpha,
+            device=device, save_path=model_path,
+            ablation=args.ablation, seed=args.seed,
+            log_interval=args.log_interval,
+            start_epoch=args.resume_epoch, init_state_dict=resume_state,
+        )
+    elif args.retrain or not os.path.exists(model_path):
         model = train(
             train_ids, id_ec, ec_id, data_dir, args.train_data,
             epochs=args.epochs, lr=args.lr, batch_size=args.batch_size,
@@ -581,7 +682,8 @@ def main():
         'batch_size': args.batch_size,
         'learning_rate': args.lr,
         'temperature': 0.07,
-        'alpha': 0.0 if args.ablation == 'no_alignment' else args.alpha,
+        'alpha': 0.0 if args.ablation in ('no_alignment', 'esm_only', 'onehot_only', 'esm_onehot',
+                                      'struct_basic', 'struct_mask') else args.alpha,
         'seed': args.seed,
         'results': {f'L{level}': results[level] for level in range(1, 5)},
     }

@@ -1,30 +1,22 @@
-# Large precomputed features (about 44 GB)
-data/features/
+# Local datasets, precomputed features, checkpoints and experiment outputs
+data/
+models/
+results/
+logs/
+*.pth
+*.npy
+*.pkl
+*.log
+*.out
 
-# Keep dataset split files and the artifact manifest in Git
-!data/splits/
-!data/splits/*.csv
-!data/MANIFEST.json
-
-# Keep release checkpoints only; ablation checkpoints can be regenerated
-models/*.pth
-!models/mvcleea_v2_split10.pth
-!models/mvcleea_v2_split50.pth
-!models/mvcleea_v2_split100.pth
-
-# Keep per-experiment ablation logs, ignore scheduler/worker noise and ad-hoc logs
-logs/*.log
-logs/ablations/*.log
-!logs/ablations/ablation_split*_seed*.log
-
-# Python and tooling caches
+# Python caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
-# Environments, editors and operating-system files
+# Environments and editor files
 .venv/
 venv/
 .idea/
@@ -32,7 +24,9 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Temporary and local runtime files
+# Local configuration and temporary files
+.env
+.env.*
 tmp/
 *.tmp
 *.swp

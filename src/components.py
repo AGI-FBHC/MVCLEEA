@@ -30,7 +30,7 @@ class PLMViewEncoder(nn.Module):
 
 
 class CrossAttentionPooling(nn.Module):
-    """Use a learnable global token to aggregate three feature views."""
+    """Use a learnable global token to aggregate feature views."""
 
     def __init__(self, feature_dim=256, num_heads=8):
         super().__init__()
@@ -45,22 +45,27 @@ class CrossAttentionPooling(nn.Module):
         self.layer_norm = nn.LayerNorm(feature_dim)
 
     def forward(self, esm, pssm, onehot):
-        batch_size = esm.size(0)
-        views = torch.stack([esm, pssm, onehot], dim=1)
+        return self.forward_views([esm, pssm, onehot])
+
+    def forward_views(self, views):
+        """Aggregate a variable number of feature views with the global token."""
+        batch_size = views[0].size(0)
+        stacked = torch.stack(views, dim=1)
+        n_views = stacked.size(1)
         query = self.q_proj(
             self.global_token.expand(batch_size, -1, -1)
         )
-        keys = self.k_proj(views)
-        values = self.v_proj(views)
+        keys = self.k_proj(stacked)
+        values = self.v_proj(stacked)
 
         query = query.view(
             batch_size, 1, self.num_heads, self.head_dim
         ).transpose(1, 2)
         keys = keys.view(
-            batch_size, 3, self.num_heads, self.head_dim
+            batch_size, n_views, self.num_heads, self.head_dim
         ).transpose(1, 2)
         values = values.view(
-            batch_size, 3, self.num_heads, self.head_dim
+            batch_size, n_views, self.num_heads, self.head_dim
         ).transpose(1, 2)
 
         attention = torch.matmul(
