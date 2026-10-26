@@ -1,5 +1,8 @@
-# Local datasets, precomputed features, checkpoints and experiment outputs
-data/
+# Training splits, generated features, checkpoints and experiment outputs
+data/*
+!data/README.md
+!data/datasets/
+!data/datasets/*.csv
 models/
 results/
 logs/
