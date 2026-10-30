@@ -1,49 +1,54 @@
 # MVCLEEA
 
-MVCLEEA（Multi-View Contrastive Learning for Enzyme Function Prediction）是一个面向酶 EC 编号预测的多视图对比学习框架。
+### Multi-View Contrastive Learning for Enzyme Function Prediction
 
-本仓库保存方法实现、ESM-2/PSSM/One-Hot 特征提取代码，以及论文使用的三个独立测试集（New-392、Price-149、New-815）。训练 split、预计算特征、训练日志、模型 checkpoint 和实验结果不纳入 Git。
+MVCLEEA predicts Enzyme Commission (EC) numbers from protein sequences by combining **ESM-2 semantics**, **PSSM evolutionary profiles**, and **one-hot residue identities**. Hierarchical multilabel contrastive learning organizes the protein embedding space, and cosine KNN voting assigns complete EC annotations.
 
-## 方法组成
+This repository provides the method implementation, three feature-extraction utilities, and the New-392, Price-149, and New-815 evaluation datasets used in the paper.
 
-- **ESM-2 语义视图**：对真实残基位置进行平均池化，排除 BOS、EOS 和 padding；
-- **PSSM 进化视图**：使用带残差连接的序列一维卷积编码；
-- **One-Hot 残基视图**：保留氨基酸身份和局部顺序信息；
-- **跨视图注意力**：通过全局 token 聚合三类视图；
-- **动态特征融合**：为各视图生成逐蛋白权重，并保留 ESM-2 残差；
-- **层级对比学习**：按 EC L1-L4 前缀构造多标签正样本；
-- **教师对齐**：将 PSSM 与 One-Hot 表示弱对齐到停止梯度的 ESM-2 表示；
-- **KNN 预测**：使用最终 128 维表示和余弦 KNN 预测完整 EC 编号。
+[Overview](#overview) | [Results](#results) | [Installation](#installation) | [Datasets](#datasets) | [Feature extraction](#feature-extraction) | [Training and evaluation](#training-and-evaluation)
 
-详细方法说明见 [`docs/METHOD.md`](docs/METHOD.md)。
+## Overview
 
-## 目录结构
+![MVCLEEA framework: multi-view feature extraction, collaborative representation learning, and KNN-based EC prediction](docs/assets/mvcleea_framework.png)
+
+*Figure 1 from the manuscript. The model uses amino-acid sequences and sequence-derived features as inputs.*
+
+The framework comprises three modules:
+
+1. **Multi-View Feature Extraction Module (MVFEM).** Frozen ESM-2 supplies a protein-level semantic vector. PSI-BLAST generates evolutionary profiles, and one-hot encoding records residue identities. Dedicated encoders map these views to a common 256-dimensional space.
+2. **Multi-View Collaborative Representation Learning Module (MVCRL).** A learnable global token attends to the three views to obtain a consensus representation. A protein-specific gate combines the individual views and the consensus, followed by projection to a 128-dimensional embedding. Hierarchical multilabel supervision and ESM-guided alignment train the embedding network.
+3. **KNN-based Hierarchical Prediction Module (KNN-HPM).** Cosine similarity retrieves ten reference proteins. Similarity-weighted voting returns complete EC labels with accumulated votes of at least 0.3, with the highest-vote label as a fallback. Evaluation at L1-L3 uses prefixes of the complete EC predictions.
+
+Two proteins form a positive pair at an EC level when their label sets share at least one prefix at that level. The contrastive objective weights L1-L4 by `(0.1, 0.2, 0.3, 0.4)`. At the default alignment weight, the total loss is:
 
 ```text
-MVCLEEA/
-├── README.md
-├── requirements.txt
-├── data/
-│   ├── README.md
-│   └── datasets/
-│       ├── new.csv          # New-392
-│       ├── price.csv        # Price-149
-│       └── new-815.csv      # New-815
-├── docs/
-│   └── METHOD.md
-└── src/
-    ├── train.py             # 模型、损失、训练、评估和消融入口
-    ├── components.py        # 编码器、跨视图注意力和投影头
-    ├── extract_esm2.py      # ESM-2 特征提取
-    ├── extract_pssm.py      # PSI-BLAST PSSM 特征提取
-    └── extract_onehot.py    # One-Hot 残基特征提取
+loss = 0.9 * hierarchical_multilabel_contrastive_loss
+     + 0.1 * ESM_guided_alignment_loss
 ```
 
-## 环境
+See [METHOD.md](docs/METHOD.md) for the method outline.
 
-已验证环境为 Python 3.10、PyTorch 2.5.1 + CUDA 12.1、NumPy 2.2.6、scikit-learn 1.7.2 和 NVIDIA RTX 3090。
+## Results
+
+Complete EC number prediction at **Level 4**, as reported in Table 2 of the manuscript:
+
+| Dataset | Precision | Recall | F1 |
+|---|---:|---:|---:|
+| New-392 | 0.652 ± 0.001 | 0.777 ± 0.001 | **0.672 ± 0.001** |
+| Price-149 | 0.594 ± 0.002 | 0.592 ± 0.002 | **0.559 ± 0.002** |
+| New-815 | 0.729 ± 0.002 | 0.797 ± 0.002 | **0.743 ± 0.002** |
+
+The manuscript reports means and standard deviations over ten runs. Each metric is calculated per EC category and averaged using true-label frequencies as weights. F1 is therefore calculated separately from the aggregate Precision and Recall.
+
+## Installation
+
+The reference software environment uses Python 3.10, PyTorch 2.5.1 with CUDA 12.1, NumPy 2.2.6, scikit-learn 1.7.2, and fair-esm 2.0.0. The paper experiments use an NVIDIA RTX 3090. The shell commands below assume Bash and run from the repository root.
 
 ```bash
+git clone https://github.com/AGI-FBHC/MVCLEEA.git
+cd MVCLEEA
+
 conda create -n mvcleea python=3.10 -y
 conda activate mvcleea
 
@@ -51,47 +56,67 @@ pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
 ```
 
-## 数据布局
+PSSM extraction also requires an NCBI BLAST+ installation containing `psiblast` and a protein BLAST database. Supply both paths when running the extractor. The ESM-2 extraction script requires a CUDA GPU and downloads the pretrained model on first use.
 
-论文测试集位于 `data/datasets/`。训练代码仍从 `data/splits/` 读取训练划分，但训练 split 不随仓库发布，需要在本地准备。如果训练数据位于其他位置，可通过 `--project_root` 指定工作目录。
+## Datasets
+
+| Dataset | Proteins | Complete EC categories | Included file |
+|---|---:|---:|---|
+| New-392 | 392 | 177 | [new.csv](data/datasets/new.csv) |
+| Price-149 | 149 | 56 | [price.csv](data/datasets/price.csv) |
+| New-815 | 815 | 380 | [new-815.csv](data/datasets/new-815.csv) |
+
+The `.csv` files are **TAB-separated**, with a header and three columns:
 
 ```text
-workspace/
-├── data/
-│   ├── splits/                 # 用户本地提供，不纳入 Git
-│   │   ├── split10.csv
-│   │   ├── split50.csv
-│   │   ├── split100.csv
-│   │   ├── new.csv
-│   │   ├── price.csv
-│   │   └── new-815.csv
-│   └── features/               # 生成结果，不纳入 Git
-│       ├── esm2/
-│       │   └── <UniProt_ID>.pt
-│       ├── esm2_split100_cache.npy
-│       ├── esm2_split100_cache_ids.pkl
-│       ├── pssm/
-│       │   ├── <split>_pssm.npy
-│       │   └── <split>_ids.pkl
-│       └── onehot/
-│           ├── <split>_onehot.npy
-│           └── <split>_ids.pkl
-├── models/
-└── results/
+Entry    EC number    Sequence
 ```
 
-训练与评估代码当前统一从 `data/splits/` 读取 CSV。使用本仓库附带的测试集时，可将 `data/datasets/*.csv` 复制或软链接到工作目录的 `data/splits/` 下。
+Multiple EC labels for a protein are separated by semicolons. Dataset provenance and SHA-256 checksums are listed in [data/README.md](data/README.md).
 
-张量规格：
+The repository includes the three external test sets. Prepare training and validation tables separately. The manuscript describes a source collection of 227,362 proteins covering 5,236 complete EC categories, with 5% held out for validation.
 
-- ESM-2：每个蛋白质一个 1280 维 `.pt` 文件；
-- PSSM：`N × 1024 × 20`，`float32`；
-- One-Hot：`N × 1024 × 21`，`float32`；
-- 序列长度不足 1024 时在末尾补零，padding mask 由 One-Hot 全零位置构造。
+### Prepare a local workspace
 
-## 特征提取
+The training entry point reads both reference and test tables from `data/splits/`. Copy the included test sets there and add your training table as `train.csv`:
 
-三个脚本都读取 TAB 分隔的 CSV，使用第一列蛋白质 ID、第三列氨基酸序列，并按输入 CSV 的顺序输出 ID 映射。
+```bash
+mkdir -p data/splits data/features/esm2 data/features/pssm data/features/onehot
+mkdir -p models results
+cp data/datasets/*.csv data/splits/
+```
+
+Use the same dataset stem in the table and feature filenames. For example, `train.csv` corresponds to `train_pssm.npy`, `train_onehot.npy`, and their ID mappings.
+
+```text
+data/
+  datasets/                  # Included external test tables
+  splits/                    # Local tables consumed by train.py
+    train.csv
+    new.csv
+    price.csv
+    new-815.csv
+  features/                  # Generated locally
+    esm2/<protein_id>.pt
+    pssm/<dataset>_pssm.npy
+    pssm/<dataset>_ids.pkl
+    onehot/<dataset>_onehot.npy
+    onehot/<dataset>_ids.pkl
+```
+
+Training tables, generated features, checkpoints, and run outputs remain outside Git. Use `--project_root /path/to/workspace` when these runtime directories are stored elsewhere.
+
+## Feature extraction
+
+| View | Feature per protein | Extraction |
+|---|---|---|
+| Semantic | `1280` | Frozen `esm2_t33_650M_UR50D`, layer 33; mean over real residues |
+| Evolutionary | `1024 x 20` | PSI-BLAST substitution scores followed by sigmoid normalization |
+| Residue identity | `1024 x 21` | 20 standard amino acids plus one channel for non-standard residues |
+
+PSSM and one-hot arrays use `float32` and include a leading protein dimension: `(N, 1024, 20)` and `(N, 1024, 21)`, respectively. Their ID files record the row order. ESM-2 stores one tensor per protein ID.
+
+The following commands extract features for the included test sets. After preparing `data/splits/train.csv`, run the same commands with `--data_dir data/splits --datasets train` to generate the training features.
 
 ### ESM-2
 
@@ -100,15 +125,13 @@ python src/extract_esm2.py \
   --data_dir data/datasets \
   --output_dir data/features/esm2 \
   --datasets new price new-815 \
-  --batch_size 8 \
+  --batch_size 2 \
   --gpu 0
 ```
 
-脚本使用 `esm2_t33_650M_UR50D` 的第 33 层表示，并只对真实残基位置做平均池化。
+Mean pooling excludes BOS, EOS, and batch-padding tokens. The script reuses existing `<protein_id>.pt` files; use a separate output directory when changing the model or pooling procedure.
 
 ### PSSM
-
-PSSM 由 NCBI PSI-BLAST 生成，默认执行 3 轮，E-value 阈值为 `1e-3`，截断或补齐到 1024 个残基，并对 20 列 PSSM 分数执行 sigmoid 归一化。BLAST 程序和数据库不随仓库发布。PSSM 数值依赖 BLAST 版本和数据库快照，严格复现实验时必须同时记录并固定所用数据库。
 
 ```bash
 python src/extract_pssm.py \
@@ -116,95 +139,111 @@ python src/extract_pssm.py \
   --output_dir data/features/pssm \
   --datasets new price new-815 \
   --psiblast /path/to/psiblast \
-  --blast_db /path/to/blast_db \
+  --blast_db /path/to/protein_database \
   --num_iterations 3 \
   --evalue 1e-3 \
-  --workers 8
+  --max_length 1024 \
+  --workers 4
 ```
 
-输出为 `<dataset>_pssm.npy` 和 `<dataset>_ids.pkl`。
+Replace the executable and database paths with your installation. The script writes `<dataset>_pssm.npy` and `<dataset>_ids.pkl`, and raises an error if PSI-BLAST fails. Record the BLAST+ version, source database release, and database-building command when preparing an experiment.
 
-### One-Hot
+The parser applies sigmoid to a zero-initialized score matrix, so unused rows can contain `0.5`. The model derives valid positions from the one-hot view and masks PSSM padding before encoding. Generate both views from the same sequences and keep their ID mappings aligned.
 
-One-Hot 使用 `ACDEFGHIKLMNPQRSTVWY` 作为前 20 个通道，第 21 个通道表示非标准残基；超过 1024 个残基的序列截断，较短序列在末尾补零。
+### One-hot
 
 ```bash
 python src/extract_onehot.py \
   --data_dir data/datasets \
   --output_dir data/features/onehot \
-  --datasets new price new-815
+  --datasets new price new-815 \
+  --max_length 1024
 ```
 
-输出为 `<dataset>_onehot.npy` 和 `<dataset>_ids.pkl`。
+Channels 0-19 follow `ACDEFGHIKLMNPQRSTVWY`; channel 20 represents non-standard residues. The script truncates sequences to 1024 positions, pads shorter sequences with zeros, and writes `<dataset>_onehot.npy` and `<dataset>_ids.pkl`.
 
-## 训练
+## Training and evaluation
 
-训练前需自行准备 `split10.csv`、`split50.csv` 和 `split100.csv`，放到 `workspace/data/splits/`。
+Prepare all three feature types for the training reference set and the selected test set before running the model. Reference proteins and their EC annotations are required for KNN evaluation as well as for training.
+
+### Train a model
 
 ```bash
 python src/train.py \
-  --train_data split10 \
+  --project_root . \
+  --train_data train \
   --test_data new \
   --epochs 100 \
   --batch_size 128 \
-  --gpu 0 \
+  --lr 0.0005 \
+  --alpha 0.1 \
   --seed 42 \
-  --retrain \
-  --project_root workspace
+  --gpu 0 \
+  --experiment_name mvcleea_train_seed42 \
+  --retrain
 ```
 
-将 `split10` 替换为 `split50` 或 `split100` 可运行其他训练规模。模型保存到 `workspace/models/`，评估结果保存到 `workspace/results/`。
+The script evaluates the trained model at EC levels L1-L4 and saves:
 
-## 评估已有模型
+- Model weights: `models/mvcleea_train_seed42.pth`
+- Metrics and run settings: `results/mvcleea_train_seed42.json`
+
+The training loop selects weights using the lowest training loss. It does not create a validation partition or tune hyperparameters automatically. To follow the paper protocol, prepare the training/validation separation first, select settings using validation data, and keep the external test sets for final evaluation.
+
+### Evaluate saved weights
 
 ```bash
 python src/train.py \
-  --train_data split100 \
+  --project_root . \
+  --train_data train \
   --test_data new \
-  --gpu 0 \
-  --project_root workspace
+  --experiment_name mvcleea_train_seed42 \
+  --gpu 0
 ```
 
-不添加 `--retrain` 时，程序会加载对应的已有模型 checkpoint 并进行评估。
+This loads `models/mvcleea_train_seed42.pth` when the file exists. If the checkpoint is absent, the current entry point starts training automatically. Change `--test_data` to `price` or `new-815` to evaluate the other datasets. Each call writes to the same experiment-named JSON file; preserve it under a dataset-specific name before evaluating the next test set.
 
-## 消融配置
+KNN uses `K = 10` and a vote threshold of `0.3`, fixed inside `evaluate_model()`. `--seed` controls one training run; repeat training with distinct seeds and experiment names to collect repeated-run statistics.
 
-`src/train.py` 支持以下 `--ablation` 取值：
+### Ablations
+
+Use `--ablation` together with a distinct `--experiment_name` to select a variant:
+
+| Group | Available values |
+|---|---|
+| Full model | `full` |
+| Individual views | `esm_only`, `pssm_only`, `onehot_only` |
+| View pairs | `pssm_esm2`, `esm_onehot`, `pssm_onehot` |
+| Component removal | `no_mask`, `no_alignment`, `no_cross_attention`, `no_dynamic_fusion`, `no_pssm`, `no_onehot` |
+| Supervision | `single_label`, `l4_only` |
+| Stepwise structure | `struct_basic`, `struct_mask`, `struct_align`, `struct_attn` |
+
+For example, append `--ablation no_cross_attention` and set `--experiment_name no_cross_attention_seed42` in the training command. Keep the data, seed, and remaining settings consistent across variants.
+
+## Repository structure
 
 ```text
-full
-no_mask
-single_label
-l4_only
-no_dynamic_fusion
-no_cross_attention
-no_alignment
-no_pssm
-no_onehot
-pssm_only
-pssm_onehot
-pssm_esm2
-esm_only
-onehot_only
-esm_onehot
-struct_basic
-struct_mask
-struct_align
-struct_attn
+MVCLEEA/
+  README.md
+  requirements.txt
+  data/
+    README.md
+    datasets/{new,price,new-815}.csv
+  docs/
+    METHOD.md
+    assets/mvcleea_framework.png
+  src/
+    components.py            # View encoders, attention, projection head
+    train.py                 # Model, loss, training, and KNN evaluation
+    extract_esm2.py
+    extract_pssm.py
+    extract_onehot.py
 ```
 
-例如：
+## Paper and acknowledgements
 
-```bash
-python src/train.py \
-  --train_data split10 \
-  --test_data new \
-  --gpu 0 \
-  --seed 42 \
-  --ablation no_cross_attention \
-  --experiment_name ablation_split10_no_cross_attention_seed42 \
-  --retrain \
-  --project_root workspace
-```
+**Multi-View Contrastive Learning for Enzyme Function Prediction**
 
-训练中断后可通过 `--resume_path` 指定断点，并使用 `--resume_epoch` 指定已完成的 epoch 数。
+Jie Ge, Haijun Shi, Zhihao Liu, Guanjin Wang, Zhaohong Deng, and Hailong Yang.
+
+We use ESM-2 for pretrained sequence representations. The evaluation datasets follow [CLEAN](https://github.com/tttianhao/CLEAN) and [MAPred](https://github.com/Rongdingyi/MAPred); see the [dataset provenance](data/README.md#provenance) for the file-to-source mapping.
